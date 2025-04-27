@@ -33,7 +33,10 @@ if (file.exists("output/od_long.xlsx")) {
   # 按 well 列合并两个数据框，即加上标签信息，再转化为长格式
   od_melt <- merge(real_od, label, by = "well")
   od_long <- pivot_longer(od_melt,
-    cols = -c("well", "plasmid", "RNA7SK", "HEXIM1", "DHFR3", "DHFR12", "meaning", "replicate"),
+    cols = -c(
+      "well", "plasmid", "replicate",
+      "RNA7SK", "HEXIM1", "DHFR3", "DHFR12", "meaning"
+    ),
     names_to = "time",
     values_to = "value",
     names_transform = list(time = as.numeric), # 转化为numeric格式
@@ -50,7 +53,10 @@ if (file.exists("output/od_long.xlsx")) {
 if (TRUE) {
   od_long$plasmidid <- paste(od_long$plasmid, od_long$meaning)
   data_control <- od_long %>% filter(meaning %in% c("positive", "negative"))
-  data_control <- subset(data_control, select = -c(RNA7SK, HEXIM1, DHFR3, DHFR12))
+  data_control <- subset(
+    data_control,
+    select = -c(RNA7SK, HEXIM1, DHFR3, DHFR12)
+  )
   data_figure <- od_long %>% filter(!meaning %in% c("positive", "negative"))
   # 绘图
   # 步骤1：生成主图的自动颜色
@@ -81,7 +87,10 @@ if (TRUE) {
     `pTY129-4 double positive` = "#FCB4B9"
   )
   if (FALSE) {
-    main_colors <- distinctColorPalette(length(unique(data_figure$plasmidid)), runTsne = TRUE)
+    main_colors <- distinctColorPalette(
+      length(unique(data_figure$plasmidid)),
+      runTsne = TRUE
+    )
     names(main_colors) <- unique(data_figure$plasmidid)
     dput(main_colors)
   }
@@ -98,7 +107,10 @@ if (TRUE) {
     {
       ggplot(
         data = data_figure,
-        aes(x = time, y = value, group = well, color = plasmidid, alpha = replicate)
+        aes(
+          x = time, y = value, group = well,
+          color = plasmidid, alpha = replicate
+        )
       ) +
         facet_grid(DHFR3 + DHFR12 ~ `RNA7SK` + `HEXIM1`) +
         geom_line() +
@@ -110,13 +122,16 @@ if (TRUE) {
       return(NULL)
     }
   )
-  ggsave("output/01.png", plot = p_1)
+  ggsave("output/01.png", plot = p_1, width = 12.36, height = 7.64)
   p_2 <- tryCatch(
     {
       p_1 + # 绘制分面对应的对照组曲线
         geom_line(
           data = data_control,
-          aes(x = time, y = value, group = well, color = plasmidid, alpha = replicate),
+          aes(
+            x = time, y = value, group = well,
+            color = plasmidid, alpha = replicate
+          ),
           inherit.aes = FALSE,
           linewidth = 0.1, linetype = "dashed"
         )
@@ -126,7 +141,7 @@ if (TRUE) {
       return(NULL)
     }
   )
-  ggsave("output/02.png", plot = p_2)
+  ggsave("output/02.png", plot = p_2, width = 12.36, height = 7.64)
 }
 #----线性拟合求生长速率----
 if (TRUE) {
@@ -137,23 +152,28 @@ if (TRUE) {
     dir.create(path = "output", showWarnings = FALSE) # 创建输出目录
     gr_all <- do.call("rbind", lapply(unique(od_long$well), function(x) {
       ds <- od_long[od_long$well == x & od_long$time <= 75, ]
-      max_od <- max(ds$value)
-      mid_od <- max_od - ((max_od - min(ds$value)) / 2)
-      time_odmax <- ds$time[ds$value == max_od]
-      time_odmid <- max(ds$time[ds$value <= mid_od & ds$time <= time_odmax[1]]) # mid_od不一定存在，且存在衰退期使odmax不止存在一个值，故取第一个
-      lmds <- data.frame(t = ds$time[ds$time <= time_odmid + 4 & ds$time >= time_odmid - 4]) # 从 ds 数据框中筛选出时间在 time_odmid 前后4h内的数据，并将这些时间点存储到新的数据框 lmds 中，作为 t 列。
+      od_max <- max(ds$value)
+      od_mid <- od_max - ((od_max - min(ds$value)) / 2)
+      time_odmax <- ds$time[ds$value == od_max]
+      time_odmid <- max(
+        ds$time[ds$value <= od_mid & ds$time <= time_odmax[1]]
+      ) # od_mid不一定存在，且存在衰退期使odmax不止存在一个值，故取第一个
+      lmds <- data.frame(
+        t = ds$time[ds$time <= time_odmid + 4 & ds$time >= time_odmid - 4]
+      ) # 从 ds 数据框中筛选出时间在 time_odmid 前后4h内的数据，并将这些时间点存储到新的数据框 lmds 中，作为 t 列。
       lmds$lgods <- log(ds$value[ds$time %in% lmds$t])
       lmfit <- lm(formula = lgods ~ t, data = lmds)
       lmds$fitted_data <- fitted(lmfit)
       r_squared <- summary(lmfit)$r.squared
-      if (TRUE) { # 是否绘制详细拟合图
+      if (FALSE) { # 是否绘制详细拟合图
         p1 <- ggplot(lmds, aes(x = t, y = lgods)) +
           geom_point(color = "blue") + # 绘制原始数据点
           geom_line(aes(y = fitted_data), color = "red") + # 绘制拟合曲线
           annotate("text",
             x = max(lmds$t) - 2.5, y = max(lmds$fitted) - 0.04,
             label = paste(
-              "y=", round(lmfit$coefficients[1], 4), "+", round(lmfit$coefficients[2], 4), "*x", "\n",
+              "y=", round(lmfit$coefficients[1], 4), "+",
+              round(lmfit$coefficients[2], 4), "*x", "\n",
               "R² =", round(r_squared, 3), "\n",
               "time_odmid=", round(time_odmid, 1), "h", "\n",
               "growth_rate=", round(lmfit$coefficients[2], 4)
@@ -174,30 +194,27 @@ if (TRUE) {
         print(paste(x, ":"))
         combined_plot <- grid.arrange(p1, p2, ncol = 2)
         ggsave(paste("output/", x, ds$plasmidid[1], ".png"), combined_plot)
-      } else {
-        print("No plot")
       }
       data.frame(
-        well = x, plasmid = ds$plasmid[1], replicate = ds$replicate[1], growth_rate = lmfit$coefficients[2], time_odmid = time_odmid,
-        `RNA7SK` = ds$`RNA7SK`[1], HEXIM1 = ds$HEXIM1[1], DHFR3 = ds$DHFR3[1], DHFR12 = ds$DHFR12[1], meaning = ds$meaning[1] # 提取对应的标签信息
+        well = x, plasmid = ds$plasmid[1], replicate = ds$replicate[1],
+        growth_rate = lmfit$coefficients[2], time_odmid = time_odmid, od_max = od_max,
+        `RNA7SK` = ds$`RNA7SK`[1], HEXIM1 = ds$HEXIM1[1],
+        DHFR3 = ds$DHFR3[1], DHFR12 = ds$DHFR12[1], meaning = ds$meaning[1] # 提取对应的标签信息
       )
     }))
     write_xlsx(gr_all, path = "output/growth_rate.xlsx")
   }
   # 对中值时间及生长速率进行线性拟合
-  # tvfit <- lm(formula = time_odmid ~ growth_rate, data = gr_all)
-  # gr_all$tmid_fitted <- fitted(tvfit)
-  # r_squared <- summary(tvfit)$r.squared
-  # print(summary(tvfit))
-  # 对数拟合：t=(1/b)*ln(v/a*b)
-  fit_line <- lm(formula = time_odmid ~ log(growth_rate), data = gr_all)
-  gr_all$tmid_fitted <- fitted(fit_line)
-  # 计算残差平方和 (RSS)
-  rss <- sum((gr_all$time_odmid - gr_all$tmid_fitted)^2)
-  # 计算总平方和 (TSS)
-  tss <- sum((gr_all$time_odmid - mean(gr_all$time_odmid))^2)
-  # 计算 R²
-  r_squared <- 1 - rss / tss # 或等价于: r_squared <- sum((gr_all$tmid_fitted - y_mean)^2) / tss
+  if (TRUE) { # 线性拟合
+    tvfit <- lm(formula = time_odmid ~ growth_rate, data = gr_all)
+    gr_all$tmid_fitted <- fitted(tvfit)
+    r_squared <- summary(tvfit)$r.squared
+  }
+  if (FALSE) { # 对数拟合：t=(1/b)*ln(v/a*b)
+    tvfit <- lm(formula = time_odmid ~ log(growth_rate), data = gr_all)
+    gr_all$tmid_fitted <- fitted(tvfit)
+    r_squared <- summary(tvfit)$r.squared
+  }
   gr_all$class_color <- paste(gr_all$DHFR3, gr_all$DHFR12, sep = " ")
   gr_all$class_text <- paste(gr_all$meaning, gr_all$class_color, sep = " ")
   sample <- gr_all %>% # 分类取样
@@ -213,7 +230,10 @@ if (TRUE) {
     `NA NA` = "#F287F0"
   ), amount = 0.4, fix = TRUE)
   if (FALSE) {
-    main_colors <- distinctColorPalette(length(unique(gr_all$class_color)), runTsne = TRUE)
+    main_colors <- distinctColorPalette(
+      length(unique(gr_all$class_color)),
+      runTsne = TRUE
+    )
     names(main_colors) <- unique(gr_all$class_color)
     dput(main_colors)
   }
@@ -232,12 +252,39 @@ if (TRUE) {
     annotate("text",
       x = min(gr_all$growth_rate) + 0.15, y = max(gr_all$time_odmid) - 10,
       label = paste(
-        "y=", round(fit_line$coefficients[1], 4), "+", round(fit_line$coefficients[2], 4), "*ln(x)", "\n",
+        "y=", round(tvfit$coefficients[1], 4), "+",
+        round(tvfit$coefficients[2], 4), "*x", "\n",
         "R² =", round(r_squared, 3)
       ), hjust = 1
     ) +
     scale_color_manual(values = main_colors)
-  ggsave("output/p_tv.png", plot = p_tv)
+  ggsave("output/p_tv.png", plot = p_tv, width = 12.36, height = 7.64)
+  # 最大OD值与生长速率的关系
+  odvfit <- lm(formula = od_max ~ growth_rate, data = gr_all)
+  gr_all$odmax_fitted <- fitted(odvfit)
+  r_squared <- summary(odvfit)$r.squared
+  p_odv <- ggplot(
+    data = gr_all,
+    aes(x = growth_rate, y = od_max, color = class_color, shape = meaning)
+  ) +
+    geom_point() + # 实验数据点
+    geom_label_repel(
+      data = sample, aes(label = class_text),
+      size = 2, alpha = 0.64, point.padding = 2, fill = NA,
+    ) + # 图中添加数据标签
+    geom_line(aes(x = growth_rate, y = odmax_fitted), # 拟合曲线
+      color = "red", linetype = "dotdash", inherit.aes = FALSE
+    ) +
+    annotate("text",
+      x = min(gr_all$growth_rate) + 0.05, y = max(gr_all$od_max),
+      label = paste(
+        "y=", round(tvfit$coefficients[1], 4), "+",
+        round(tvfit$coefficients[2], 4), "*x", "\n",
+        "R² =", round(r_squared, 3)
+      ), hjust = 1
+    ) +
+    scale_color_manual(values = main_colors)
+  ggsave("output/p_odv.png", plot = p_odv, width = 12.36, height = 7.64)
   # 类别与生长速率的关系
   p_vplasmid <- ggplot(
     data = gr_all,
@@ -249,13 +296,13 @@ if (TRUE) {
       size = 2, alpha = 0.64, point.padding = 2, fill = NA,
     ) + # 图中添加数据标签
     scale_color_manual(values = main_colors)
-  ggsave("output/p_vp.png", plot = p_vplasmid)
+  ggsave("output/p_vp.png", plot = p_vplasmid, width = 12.36, height = 7.64)
   p_vp1 <- p_vplasmid + geom_boxplot(
     aes(group = class_text),
     fill = NA, alpha = 0.64,
     outlier.color = "red", outlier.shape = 4 # 离群值
   )
-  ggsave("output/p_vp1.png", plot = p_vp1)
+  ggsave("output/p_vp1.png", plot = p_vp1, width = 12.36, height = 7.64)
 }
 #----罗吉斯特模型拟合求生长曲线----
 if (TRUE) {
@@ -266,19 +313,26 @@ if (TRUE) {
     dir.create(path = "output", showWarnings = FALSE) # 创建输出目录
     gr_lg <- do.call("rbind", lapply(unique(od_long$well), function(x) {
       ds <- od_long[od_long$well == x, ]
-      max_od <- max(ds$value)
-      mid_od <- max_od - ((max_od - min(ds$value)) / 2)
-      time_odmax <- ds$time[ds$value == max_od]
-      time_odmid <- max(ds$time[ds$value <= mid_od & ds$time <= time_odmax[1]]) # mid_od不一定存在，且存在衰退期使odmax不止存在一个值，故取第一个
+      od_max <- max(ds$value)
+      od_mid <- od_max - ((od_max - min(ds$value)) / 2)
+      time_odmax <- ds$time[ds$value == od_max]
+      time_odmid <- max(
+        ds$time[ds$value <= od_mid & ds$time <= time_odmax[1]]
+      ) # od_mid不一定存在，且存在衰退期使odmax不止存在一个值，故取第一个
       time_odstart <- min(ds$time[ds$value > 5e-3]) # 取大于5e-3的最小时间点
       data_fitting <- data.frame(
-        time_fitting = ds$time[ds$time <= 2 * time_odmid - time_odstart & ds$time >= time_odstart & ds$time >= 5e-3]
+        time_fitting = ds$time[
+          ds$time <= 2 * time_odmid - time_odstart & ds$time >= time_odstart &
+            ds$time >= 5e-3
+        ]
       ) # 从 ds 数据框中筛选出时间在 time_odmid 前后大于5e-3的数据，并将这些时间点存储到新的数据框 lmds 中，作为 t 列。
       data_fitting$value_fitting <- ds$value[ds$time %in% data_fitting$time_fitting]
-      # data_fitting$value_fitting[data_fitting$value_fitting < 5e-3] <- 5e-3 # 将小于5e-3的值替换为5e-3
       model <- tryCatch(
         {
-          drm(value_fitting ~ time_fitting, data = data_fitting, fct = L.5(fixed = c(NA, 5e-3, NA, NA, NA))) # L.5()函数用于定义五参数逻辑斯蒂模型
+          drm(value_fitting ~ time_fitting,
+            data = data_fitting,
+            fct = L.5(fixed = c(NA, 5e-3, NA, NA, NA))
+          ) # L.5()函数用于定义五参数逻辑斯蒂模型
         },
         error = function(e) {
           message(paste("!!!Error in drm for experiment:", x, " - ", e$message))
@@ -289,93 +343,197 @@ if (TRUE) {
         print(paste("Model fitting failed for well:", x))
         return(NULL) # 如果模型拟合失败，跳过当前数据集
       }
-      p_values <- coef(summary(model))[, "p-value"]
-      # 生成预测数据（100个点用于平滑曲线）
-      pred_data <- data.frame(
-        time_fitting = seq(min(data_fitting$time_fitting), max(data_fitting$time_fitting), length = 100)
-      )
+      if (FALSE) { # 是否绘制详细拟合图
 
-      # 计算预测值和置信区间（注意：predict.drc返回矩阵）
-      pred <- predict(model,
-        newdata = pred_data,
-        interval = "confidence", # 均值置信区间
-        level = 0.95
-      ) # 95%置信水平
-      # 将预测结果合并到数据框
-      pred_data$pred <- pred[, "Prediction"]
-      pred_data$lower <- pred[, "Lower"]
-      pred_data$upper <- pred[, "Upper"]
-      # 计算R²
-      r2 <- 1 - (sum(residuals(model)^2) / (length(data_fitting$value_fitting) - 1 - 1)) /
-        (sum((data_fitting$value_fitting - mean(data_fitting$value_fitting))^2) / (length(data_fitting$value_fitting) - 1)) # 计算调整后R²值
-      # 绘制图形
-      p <- tryCatch(
-        {
-          ggplot() +
-            # 1. 原始数据点
-            geom_point(
-              data = data_fitting,
-              aes(x = time_fitting, y = value_fitting),
-              color = "black"
-            ) +
-            # 2. 拟合曲线
-            geom_line(
-              data = pred_data,
-              aes(x = time_fitting, y = pred),
-              color = "red",
-              linewidth = 1.5,
-              linetype = "dotdash"
-            ) +
-            # 3. 置信区间包络线
-            geom_ribbon(
-              data = pred_data,
-              aes(x = time_fitting, ymin = lower, ymax = upper),
-              fill = "blue",
-              alpha = 0.2
-            ) +
-            # 4. 添加R²标签
-            annotate(
-              "text",
-              x = min(data_fitting$time_fitting),
-              y = max(data_fitting$value_fitting),
-              label = sprintf("R² = %.4f", r2),
-              hjust = 0,
-              vjust = 1,
-              size = 5,
-              color = "darkred",
-              fontface = "bold"
-            ) +
-            # 美化主题和标签
-            labs(
-              title = "Logistic Model - " %>% paste(x, ds$plasmid[1]),
-              x = "time/h",
-              y = "OD_600",
-            )
-        },
-        error = function(e) {
-          message(paste("!!!Error in printing figure:", x, " - ", e$message))
-          return(NULL)
-        }
-      )
-      print(paste(x, ":"))
-      tryCatch(
-        {
-          ggsave(paste("output/logistic model_", x, ds$plasmid[1], ".png"), plot = p)
-        },
-        error = function(e) {
-          message(paste("!!!Error in saving figure:", x, " - ", e$message))
-        }
-      )
+        p_values <- coef(summary(model))[, "p-value"]
+        # 生成预测数据（100个点用于平滑曲线）
+        pred_data <- data.frame(
+          time_fitting = seq(
+            min(data_fitting$time_fitting), max(data_fitting$time_fitting),
+            length = 100
+          )
+        )
+        # 计算预测值和置信区间（注意：predict.drc返回矩阵）
+        pred <- predict(model,
+          newdata = pred_data,
+          interval = "confidence", # 均值置信区间
+          level = 0.95
+        ) # 95%置信水平
+        # 将预测结果合并到数据框
+        pred_data$pred <- pred[, "Prediction"]
+        pred_data$lower <- pred[, "Lower"]
+        pred_data$upper <- pred[, "Upper"]
+        # 计算R²
+        r2 <- 1 - (
+          sum(residuals(model)^2) / (length(data_fitting$value_fitting) - 1 - 1)
+        ) /
+          (
+            sum((data_fitting$value_fitting - mean(data_fitting$value_fitting))^2) / (length(data_fitting$value_fitting) - 1)
+          ) # 计算调整后R²值
+        # 绘制图形
+        p <- tryCatch(
+          {
+            ggplot() +
+              # 1. 原始数据点
+              geom_point(
+                data = data_fitting,
+                aes(x = time_fitting, y = value_fitting),
+                color = "black"
+              ) +
+              # 2. 拟合曲线
+              geom_line(
+                data = pred_data,
+                aes(x = time_fitting, y = pred),
+                color = "red",
+                linewidth = 1.5,
+                linetype = "dotdash"
+              ) +
+              # 3. 置信区间包络线
+              geom_ribbon(
+                data = pred_data,
+                aes(x = time_fitting, ymin = lower, ymax = upper),
+                fill = "blue",
+                alpha = 0.2
+              ) +
+              # 4. 添加R²标签
+              annotate(
+                "text",
+                x = min(data_fitting$time_fitting),
+                y = max(data_fitting$value_fitting),
+                label = sprintf("R² = %.4f", r2),
+                hjust = 0,
+                vjust = 1,
+                size = 5,
+                color = "darkred",
+                fontface = "bold"
+              ) +
+              # 美化主题和标签
+              labs(
+                title = "Logistic Model - " %>% paste(x, ds$plasmid[1]),
+                x = "time/h",
+                y = "OD_600",
+              )
+          },
+          error = function(e) {
+            message(paste("!!!Error in printing figure:", x, " - ", e$message))
+            return(NULL)
+          }
+        )
+        print(paste(x, ":"))
+        tryCatch(
+          {
+            ggsave(paste("output/logistic model_", x, ds$plasmid[1], ".png"), plot = p)
+          },
+          error = function(e) {
+            message(paste("!!!Error in saving figure:", x, " - ", e$message))
+          }
+        )
+      }
       params <- coef(model) # 提取参数
-      # plot(model, log = "y", main = paste("Logistic Model -", x), xlab = "Time/h", ylab = "OD_600")
       data.frame(
         well = x, plasmid = ds$plasmid[1], replicate = ds$replicate[1], meaning = ds$meaning[1],
-        `RNA7SK` = ds$`RNA7SK`[1], HEXIM1 = ds$HEXIM1[1], DHFR3 = ds$DHFR3[1], DHFR12 = ds$DHFR12[1], # 提取对应的标签信息
-        growth_rate = -1 * params[1], value_min = 5e-3, value_max = params[2], f = params[4], # 提取模型参数
+        `RNA7SK` = ds$`RNA7SK`[1], HEXIM1 = ds$HEXIM1[1],
+        DHFR3 = ds$DHFR3[1], DHFR12 = ds$DHFR12[1], # 提取对应的标签信息
+        growth_rate = -1 * params[1], od_min = 5e-3,
+        od_max = params[2], f = params[4], # 提取模型参数
         time_odmid = time_odmid, time_odmid_fitted = params[3], # 提取时间参数
         row.names = NULL
       )
     }))
     write_xlsx(gr_lg, path = "output/growth_curve_logistic.xlsx")
   }
+  # 对中值时间及生长速率进行线性拟合
+  # 线性拟合
+  gr_lg <- gr_lg[gr_lg$well != "K11", ] # 除去异常值
+  tvfit <- lm(formula = time_odmid ~ growth_rate, data = gr_lg)
+  gr_lg$tmid_fitted <- fitted(tvfit)
+  r_squared <- summary(tvfit)$r.squared
+  gr_lg$class_color <- paste(gr_lg$DHFR3, gr_lg$DHFR12, sep = " ")
+  gr_lg$class_text <- paste(gr_lg$meaning, gr_lg$class_color, sep = " ")
+  sample <- gr_lg %>% # 分类取样
+    group_by(class_text) %>% # 按class分组
+    slice(1) %>% # 取每组第一行
+    ungroup() # 取消分组
+  # 生成高对比度颜色
+  main_colors <- darken(c(
+    `DHFR3_C_term DHFR12_N_term` = "#CABEEE",
+    `DHFR3_C_term DHFR12_C_term` = "#ACE787",
+    `DHFR3_N_term DHFR12_N_term` = "#B7FEF9",
+    `DHFR3_N_term DHFR12_C_term` = "#F5C294",
+    `NA NA` = "#F287F0"
+  ), amount = 0.4, fix = TRUE)
+  if (FALSE) {
+    main_colors <- distinctColorPalette(
+      length(unique(gr_lg$class_color)),
+      runTsne = TRUE
+    )
+    names(main_colors) <- unique(gr_lg$class_color)
+    dput(main_colors)
+  }
+  p_tv_lg <- ggplot(
+    data = gr_lg,
+    aes(x = growth_rate, y = time_odmid, color = class_color, shape = meaning)
+  ) +
+    geom_point() + # 实验数据点
+    geom_label_repel(
+      data = sample, aes(label = class_text),
+      size = 2, alpha = 0.64, point.padding = 2, fill = NA,
+    ) + # 图中添加数据标签
+    geom_line(aes(x = growth_rate, y = tmid_fitted), # 拟合曲线
+      color = "red", linetype = "dotdash", inherit.aes = FALSE
+    ) +
+    annotate("text",
+      x = min(gr_lg$growth_rate) + 0.15, y = max(gr_lg$time_odmid) - 10,
+      label = paste(
+        "y=", round(tvfit$coefficients[1], 4), "+",
+        round(tvfit$coefficients[2], 4), "*x", "\n",
+        "R² =", round(r_squared, 3)
+      ), hjust = 1
+    ) +
+    scale_color_manual(values = main_colors)
+  ggsave("output/p_tv_lg.png", plot = p_tv_lg, width = 12.36, height = 7.64)
+  # 最大OD值与生长速率的关系
+  odvfit <- lm(formula = od_max ~ growth_rate, data = gr_lg)
+  gr_lg$odmax_fitted <- fitted(odvfit)
+  r_squared <- summary(odvfit)$r.squared
+  p_odv_lg <- ggplot(
+    data = gr_lg,
+    aes(x = growth_rate, y = od_max, color = class_color, shape = meaning)
+  ) +
+    geom_point() + # 实验数据点
+    geom_label_repel(
+      data = sample, aes(label = class_text),
+      size = 2, alpha = 0.64, point.padding = 2, fill = NA,
+    ) + # 图中添加数据标签
+    geom_line(aes(x = growth_rate, y = odmax_fitted), # 拟合曲线
+      color = "red", linetype = "dotdash", inherit.aes = FALSE
+    ) +
+    annotate("text",
+      x = min(gr_lg$growth_rate) + 0.05, y = max(gr_lg$od_max),
+      label = paste(
+        "y=", round(tvfit$coefficients[1], 4), "+",
+        round(tvfit$coefficients[2], 4), "*x", "\n",
+        "R² =", round(r_squared, 3)
+      ), hjust = 1
+    ) +
+    scale_color_manual(values = main_colors)
+  ggsave("output/p_odv_lg.png", plot = p_odv_lg, width = 12.36, height = 7.64)
+  # 类别与生长速率的关系
+  p_vplasmid_lg <- ggplot(
+    data = gr_lg,
+    aes(x = growth_rate, y = plasmid, color = class_color, shape = meaning)
+  ) +
+    geom_point() + # 实验数据点
+    geom_label_repel(
+      data = sample, aes(label = class_text),
+      size = 2, alpha = 0.64, point.padding = 2, fill = NA,
+    ) + # 图中添加数据标签
+    scale_color_manual(values = main_colors)
+  ggsave("output/p_vp_lg.png", plot = p_vplasmid_lg, width = 12.36, height = 7.64)
+  p_vp1_lg <- p_vplasmid_lg + geom_boxplot(
+    aes(group = class_text),
+    fill = NA, alpha = 0.64,
+    outlier.color = "red", outlier.shape = 4 # 离群值
+  )
+  ggsave("output/p_vp1_lg.png", plot = p_vp1_lg, width = 12.36, height = 7.64)
 }
