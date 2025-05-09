@@ -20,7 +20,7 @@ label_map$well <- gsub(" ", "", paste(label_map$row, label_map$col))
 label_map <- label_map %>% filter(!is.na(plasmid))
 label_map$plasmid <- gsub(" ", "", paste("pTY", label_map$plasmid))
 label <- merge(label_map, data_property, by = "plasmid")
-label <- label %>% select(-row, -col)
+label <- subset(label, select = -c(row, col))
 label <- label %>%
     group_by(plasmid) %>%
     mutate(replicate = as.character(row_number())) %>%
@@ -28,8 +28,10 @@ label <- label %>%
 
 # 检查文件是否存在并加载/创建工作簿
 if (file.exists(file_name)) {
+    print(paste("File", file_name, "exists. Loading existing workbook."))
     wb <- loadWorkbook(file_name)
     removeWorksheet(wb, sheet_name) # 删除旧工作表
+    print(paste("Old sheet", sheet_name, "removed."))
 } else {
     wb <- createWorkbook()
 }
