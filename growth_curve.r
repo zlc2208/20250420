@@ -140,9 +140,23 @@ if (TRUE) {
     }
   )
   ggsave("output/02.png", plot = p_2, width = 12.36, height = 7.64)
+  p_3 <- ggplot(
+    data = od_long[od_long$DHFR3 == "DHFR3_C_term" & od_long$DHFR12 == "DHFR12_C_term", ],
+    aes(
+      x = time, y = value, group = well,
+      color = plasmidid, alpha = replicate
+    )
+  ) +
+    xlab("time/h") +
+    ylab("OD_600") +
+    facet_grid(DHFR3 + DHFR12 ~ `RNA7SK` + `HEXIM1`) +
+    geom_line() +
+    scale_color_manual(values = all_colors) +
+    theme(theme_classic())
+  ggsave("output/03.png", plot = p_3, width = 9.27, height = 5.73)
 }
 #----线性拟合求生长速率----
-if (TRUE) {
+if (FALSE) {
   if (file.exists("output/growth_rate.xlsx")) {
     print("growth_rate.xlsx exists, loading it...")
     gr_all <- read_excel("output/growth_rate.xlsx")
@@ -431,7 +445,10 @@ if (TRUE) {
         print(paste(x, ":"))
         tryCatch(
           {
-            ggsave(paste("output/logistic model_", x, ds$plasmid[1], ".png"), plot = p)
+            ggsave(paste("output/logistic model_", x, ds$plasmid[1], ".png"),
+              plot = p,
+              width = 5, height = 5
+            )
           },
           error = function(e) {
             message(paste("!!!Error in saving figure:", x, " - ", e$message))
@@ -565,6 +582,38 @@ if (TRUE) {
     outlier.color = "red", outlier.shape = 4 # 离群值
   )
   ggsave("output/p_vp1_lg.png", plot = p_vp1_lg, width = 12.36, height = 7.64)
+  #----比较显著性差异----
+  print("growth_rate difference:")
+  print(shapiro.test(gr_lg$growth_rate[gr_lg$plasmid_class == "double positive DHFR3_C_term DHFR12_C_term"]))
+  print(shapiro.test(gr_lg$growth_rate[gr_lg$plasmid_class == "double negative DHFR3_C_term DHFR12_C_term"]))
+  t_test <- t.test(
+    gr_lg$growth_rate[gr_lg$plasmid_class == "double positive DHFR3_C_term DHFR12_C_term"],
+    gr_lg$growth_rate[gr_lg$plasmid_class == "double negative DHFR3_C_term DHFR12_C_term"],
+    alternative = "two.sided", mu = 0,
+    conf.level = 0.95
+  )
+  print(t_test)
+  p_vplasmid_lg2 <- ggplot(
+    data = gr_lg[gr_lg$DHFR_position == "DHFR3_C_term DHFR12_C_term", ],
+    aes(
+      x = plasmid, y = growth_rate,
+      color = plasmid_class, shape = meaning,
+      alpha = replicate
+    )
+  ) +
+    facet_wrap(~DHFR_position, scales = "free_x", nrow = 1) + # 分组绘图
+    geom_point() +
+    scale_color_manual(values = main_colors) +
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+    geom_boxplot(
+      aes(group = plasmid_class),
+      fill = NA, alpha = 0.64,
+      outlier.color = "red", outlier.shape = 4 # 离群值
+    )
+  ggsave("output/p_vp1_lg2.png",
+    plot = p_vplasmid_lg2,
+    width = 6.18, height = 3.28
+  )
   # ----类别与od_max的关系----
   p_odmaxplasmid_lg <- ggplot(
     data = gr_lg,
@@ -582,11 +631,48 @@ if (TRUE) {
     # ) + # 图中添加数据标签
     scale_color_manual(values = main_colors) +
     theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
-  ggsave("output/p_odp_lg.png", plot = p_odmaxplasmid_lg, width = 12.36, height = 7.64)
+  ggsave("output/p_odp_lg.png",
+    plot = p_odmaxplasmid_lg,
+    width = 12.36, height = 7.64
+  )
   p_odp1_lg <- p_odmaxplasmid_lg + geom_boxplot(
     aes(group = plasmid_class),
     fill = NA, alpha = 0.64,
     outlier.color = "red", outlier.shape = 4 # 离群值
   )
   ggsave("output/p_odp1_lg.png", plot = p_odp1_lg, width = 12.36, height = 7.64)
+  # ----比较显著性差异----
+  # 检查正态性（如Shapiro-Wilk检验）
+  print("od_max difference:")
+  print(shapiro.test(gr_lg$od_max[gr_lg$plasmid_class == "double positive DHFR3_C_term DHFR12_C_term"]))
+  print(shapiro.test(gr_lg$od_max[gr_lg$plasmid_class == "double negative DHFR3_C_term DHFR12_C_term"]))
+  t_test <- t.test(
+    gr_lg$od_max[gr_lg$plasmid_class == "double positive DHFR3_C_term DHFR12_C_term"],
+    gr_lg$od_max[gr_lg$plasmid_class == "double negative DHFR3_C_term DHFR12_C_term"],
+    alternative = "two.sided", mu = 0,
+    conf.level = 0.95
+  )
+
+  print(t_test)
+  p_odmaxplasmid_lg2 <- ggplot(
+    data = gr_lg[gr_lg$DHFR_position == "DHFR3_C_term DHFR12_C_term", ],
+    aes(
+      x = plasmid, y = od_max,
+      color = plasmid_class, shape = meaning,
+      alpha = replicate
+    )
+  ) +
+    facet_wrap(~DHFR_position, scales = "free_x", nrow = 1) + # 分组绘图
+    geom_point() +
+    scale_color_manual(values = main_colors) +
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+    geom_boxplot(
+      aes(group = plasmid_class),
+      fill = NA, alpha = 0.64,
+      outlier.color = "red", outlier.shape = 4 # 离群值
+    )
+  ggsave("output/p_odp1_lg2.png",
+    plot = p_odmaxplasmid_lg2,
+    width = 6.18, height = 3.28
+  )
 }
