@@ -13,6 +13,18 @@ library(ggh4x)
 theme_set(theme_bw())
 setwd("D:/000weng_lab/data_R/growth_curve/20250420") # setwd() 函数用于设置工作目录
 
+# 生成带红色科学计数法的LaTeX标签
+generate_sc_label <- function(x) {
+  sci_p <- sprintf("%.3e", x) # 将数字转换为科学计数法字符串
+  parts <- strsplit(sci_p, "e")[[1]] # 分割字符串
+  base <- parts[1] # 提取基数部分
+  exponent <- as.integer(parts[2]) # 提取指数部分
+  sc_str <- paste(
+    base, "*10^", exponent
+  )
+  return(sc_str) # 返回表达式对象
+}
+
 if (file.exists("output/od_long.xlsx")) {
   print("od_long.xlsx exists, loading it...")
   od_long <- read_excel("output/od_long.xlsx") # 读取数据
@@ -218,10 +230,10 @@ if (FALSE) {
   }
   #----线性拟合结果绘图----
   # 图中分类标签取样
-  gr_all$DHFR_position <- paste(gr_all$DHFR3, gr_all$DHFR12, sep = " ")
-  gr_all$plasmid_class <- paste(gr_all$DHFR_position, gr_all$meaning, sep = " ")
+  gr_all$DHFR_layout <- paste(gr_all$DHFR3, gr_all$DHFR12, sep = " ")
+  gr_all$plasmid_type <- paste(gr_all$DHFR_layout, gr_all$meaning, sep = " ")
   sample <- gr_all %>%
-    group_by(plasmid_class) %>% # 按class分组
+    group_by(plasmid_type) %>% # 按class分组
     slice(1) %>% # 取每组第一行
     ungroup() # 取消分组
   # 生成高对比度颜色
@@ -240,10 +252,10 @@ if (FALSE) {
   # 自动生成颜色
   if (FALSE) {
     main_colors <- distinctColorPalette(
-      length(unique(gr_all$plasmid_class)),
+      length(unique(gr_all$plasmid_type)),
       runTsne = TRUE
     )
-    names(main_colors) <- unique(gr_all$plasmid_class)
+    names(main_colors) <- unique(gr_all$plasmid_type)
     dput(main_colors)
   }
   #----拟合参数再拟合----
@@ -261,11 +273,11 @@ if (FALSE) {
     }
     p_tv <- ggplot(
       data = gr_all,
-      aes(x = growth_rate, y = time_odmid, color = DHFR_position, shape = meaning)
+      aes(x = growth_rate, y = time_odmid, color = DHFR_layout, shape = meaning)
     ) +
       geom_point() + # 实验数据点
       geom_label_repel(
-        data = sample, aes(label = plasmid_class),
+        data = sample, aes(label = plasmid_type),
         size = 2, alpha = 0.64, point.padding = 2, fill = NA,
       ) + # 图中添加数据标签
       geom_line(aes(x = growth_rate, y = tmid_fitted), # 拟合曲线
@@ -287,11 +299,11 @@ if (FALSE) {
     r_squared <- summary(odvfit)$r.squared
     p_odv <- ggplot(
       data = gr_all,
-      aes(x = growth_rate, y = od_max, color = DHFR_position, shape = meaning)
+      aes(x = growth_rate, y = od_max, color = DHFR_layout, shape = meaning)
     ) +
       geom_point() + # 实验数据点
       geom_label_repel(
-        data = sample, aes(label = plasmid_class),
+        data = sample, aes(label = plasmid_type),
         size = 2, alpha = 0.64, point.padding = 2, fill = NA,
       ) + # 图中添加数据标签
       geom_line(aes(x = growth_rate, y = odmax_fitted), # 拟合曲线
@@ -311,19 +323,19 @@ if (FALSE) {
   #----类别与生长速率的关系----
   p_vplasmid <- ggplot(
     data = gr_all,
-    aes(x = plasmid, y = growth_rate, color = plasmid_class, shape = meaning)
+    aes(x = plasmid, y = growth_rate, color = plasmid_type, shape = meaning)
   ) +
-    facet_wrap(~DHFR_position, scales = "free_x", nrow = 1) + # 分组绘图
+    facet_wrap(~DHFR_layout, scales = "free_x", nrow = 1) + # 分组绘图
     geom_point() + # 实验数据点
     # geom_label_repel(
-    #  data = sample, aes(label = plasmid_class),
+    #  data = sample, aes(label = plasmid_type),
     #  size = 2, alpha = 0.64, point.padding = 2, fill = NA,
     # ) + # 图中添加数据标签
     scale_color_manual(values = main_colors) +
     theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
   ggsave("output/p_vp.png", plot = p_vplasmid, width = 12.36, height = 7.64)
   p_vp1 <- p_vplasmid + geom_boxplot(
-    aes(group = plasmid_class),
+    aes(group = plasmid_type),
     fill = NA, alpha = 0.64,
     outlier.color = "red", outlier.shape = 4 # 离群值
   )
@@ -389,10 +401,12 @@ if (TRUE) {
         pred_data$upper <- pred[, "Upper"]
         # 计算R²
         r2 <- 1 - (
-          sum(residuals(model)^2) / (length(data_fitting$value_fitting) - 1 - 1)
+          sum(residuals(model)^2) /
+            (length(data_fitting$value_fitting) - length(coef(model)) - 1)
         ) /
           (
-            sum((data_fitting$value_fitting - mean(data_fitting$value_fitting))^2) / (length(data_fitting$value_fitting) - 1)
+            sum((data_fitting$value_fitting - mean(data_fitting$value_fitting))^2) /
+              (length(data_fitting$value_fitting) - 1)
           ) # 计算调整后R²值
         # 绘制图形
         p <- tryCatch(
@@ -469,10 +483,10 @@ if (TRUE) {
     write_xlsx(gr_lg, path = "output/growth_curve_logistic.xlsx")
   }
   #----罗吉斯特模型拟合结果绘图----
-  gr_lg$DHFR_position <- paste(gr_lg$DHFR3, gr_lg$DHFR12, sep = " ")
-  gr_lg$plasmid_class <- paste(gr_lg$meaning, gr_lg$DHFR_position, sep = " ")
+  gr_lg$DHFR_layout <- paste(gr_lg$DHFR3, gr_lg$DHFR12, sep = " ")
+  gr_lg$plasmid_type <- paste(gr_lg$meaning, gr_lg$DHFR_layout, sep = " ")
   sample <- gr_lg %>% # 分类取样
-    group_by(plasmid_class) %>% # 按class分组
+    group_by(plasmid_type) %>% # 按class分组
     slice(1) %>% # 取每组第一行
     ungroup() # 取消分组
   # 生成高对比度颜色
@@ -491,10 +505,10 @@ if (TRUE) {
   # 自动生成颜色
   if (FALSE) {
     main_colors <- distinctColorPalette(
-      length(unique(gr_lg$plasmid_class)),
+      length(unique(gr_lg$plasmid_type)),
       runTsne = TRUE
     )
-    names(main_colors) <- unique(gr_lg$plasmid_class)
+    names(main_colors) <- unique(gr_lg$plasmid_type)
     dput(main_colors)
   }
   #----拟合参数再拟合----
@@ -507,14 +521,14 @@ if (TRUE) {
 
     p_tv_lg <- ggplot(
       data = gr_lg,
-      aes(x = growth_rate, y = time_odmid, color = DHFR_position, shape = meaning)
+      aes(x = growth_rate, y = time_odmid, color = DHFR_layout, shape = meaning)
     ) +
       geom_point() + # 实验数据点
       geom_point(aes(x = growth_rate, y = time_odmid_fitted),
         alpha = 0.5
       ) + # 拟合数据点
       geom_label_repel(
-        data = sample, aes(label = plasmid_class),
+        data = sample, aes(label = plasmid_type),
         size = 2, alpha = 0.64, point.padding = 2, fill = NA,
       ) + # 图中添加数据标签
       geom_line(aes(x = growth_rate, y = tmid_fitted), # 拟合曲线
@@ -536,12 +550,12 @@ if (TRUE) {
     r_squared <- summary(odvfit)$r.squared
     p_odv_lg <- ggplot(
       data = gr_lg,
-      aes(x = growth_rate, y = od_max, color = DHFR_position, shape = meaning)
+      aes(x = growth_rate, y = od_max, color = DHFR_layout, shape = meaning)
     ) +
       geom_point() + # 实验数据点
       geom_point(aes(x = growth_rate, y = od_max_fitted), alpha = 0.5) + # 拟合数据点
       geom_label_repel(
-        data = sample, aes(label = plasmid_class),
+        data = sample, aes(label = plasmid_type),
         size = 2, alpha = 0.64, point.padding = 2, fill = NA,
       ) + # 图中添加数据标签
       geom_line(aes(x = growth_rate, y = odmax_fitted), # 拟合曲线
@@ -563,50 +577,87 @@ if (TRUE) {
     data = gr_lg,
     aes(
       x = plasmid, y = growth_rate,
-      color = plasmid_class, shape = meaning,
+      color = plasmid_type, shape = meaning,
       alpha = replicate
     )
   ) +
-    facet_wrap(~DHFR_position, scales = "free_x", nrow = 1) + # 分组绘图
+    facet_wrap(~DHFR_layout, scales = "free_x", nrow = 1) + # 分组绘图
     geom_point() + # 实验数据点
     # geom_label_repel(
-    #  data = sample, aes(label = plasmid_class),
+    #  data = sample, aes(label = plasmid_type),
     #  size = 2, alpha = 0.64, point.padding = 2, fill = NA,
     # ) + # 图中添加数据标签
     scale_color_manual(values = main_colors) +
     theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
   ggsave("output/p_vp_lg.png", plot = p_vplasmid_lg, width = 12.36, height = 7.64)
+  # t检验差异显著性
+  print("alternative hypothesis: true growth_rate difference in means is greater than 0:")
+  pvt_growth_rate <- do.call(
+    "rbind",
+    lapply((unique(gr_lg$DHFR_layout)), function(x) {
+      gr_lg_sub <- gr_lg[gr_lg$DHFR_layout == x, ]
+      t_test <- t.test(
+        gr_lg_sub$growth_rate[gr_lg_sub$meaning == "double positive"],
+        gr_lg_sub$growth_rate[gr_lg_sub$meaning == "double negative"],
+        alternative = "greater",
+      )
+      print(paste(
+        "DHFR_layout:", x, "p-value:", t_test$p.value,
+        "; confidence interval:[", t_test$conf.int[1], ",", t_test$conf.int[2], "]"
+      ))
+      data.frame(
+        DHFR_layout = x,
+        t = t_test$statistic,
+        df = t_test$parameter["df"],
+        p_value = t_test$p.value,
+        label = paste(
+          "null hypothesis: u <= 0 \n",
+          "p_value =", generate_sc_label(t_test$p.value)
+        )
+      )
+    })
+  )
   p_vp1_lg <- p_vplasmid_lg + geom_boxplot(
-    aes(group = plasmid_class),
+    aes(group = plasmid_type),
     fill = NA, alpha = 0.64,
     outlier.color = "red", outlier.shape = 4 # 离群值
-  )
+  ) + # 加上t检验结果
+    geom_point() +
+    geom_text(
+      data = pvt_growth_rate,
+      aes(
+        label = label, x = -Inf, y = Inf,
+        hjust = 0, vjust = 1.2
+      ),
+      color = "darkred",
+      inherit.aes = FALSE
+    )
   ggsave("output/p_vp1_lg.png", plot = p_vp1_lg, width = 12.36, height = 7.64)
   #----比较显著性差异----
   print("growth_rate difference:")
-  print(shapiro.test(gr_lg$growth_rate[gr_lg$plasmid_class == "double positive DHFR3_C_term DHFR12_C_term"]))
-  print(shapiro.test(gr_lg$growth_rate[gr_lg$plasmid_class == "double negative DHFR3_C_term DHFR12_C_term"]))
+  print(shapiro.test(gr_lg$growth_rate[gr_lg$plasmid_type == "double positive DHFR3_C_term DHFR12_C_term"]))
+  print(shapiro.test(gr_lg$growth_rate[gr_lg$plasmid_type == "double negative DHFR3_C_term DHFR12_C_term"]))
   t_test <- t.test(
-    gr_lg$growth_rate[gr_lg$plasmid_class == "double positive DHFR3_C_term DHFR12_C_term"],
-    gr_lg$growth_rate[gr_lg$plasmid_class == "double negative DHFR3_C_term DHFR12_C_term"],
-    alternative = "two.sided", mu = 0,
+    gr_lg$growth_rate[gr_lg$plasmid_type == "double positive DHFR3_C_term DHFR12_C_term"],
+    gr_lg$growth_rate[gr_lg$plasmid_type == "double negative DHFR3_C_term DHFR12_C_term"],
+    alternative = "less", mu = 0,
     conf.level = 0.95
   )
   print(t_test)
   p_vplasmid_lg2 <- ggplot(
-    data = gr_lg[gr_lg$DHFR_position == "DHFR3_C_term DHFR12_C_term", ],
+    data = gr_lg[gr_lg$DHFR_layout == "DHFR3_C_term DHFR12_C_term", ],
     aes(
       x = plasmid, y = growth_rate,
-      color = plasmid_class, shape = meaning,
+      color = plasmid_type, shape = meaning,
       alpha = replicate
     )
   ) +
-    facet_wrap(~DHFR_position, scales = "free_x", nrow = 1) + # 分组绘图
+    facet_wrap(~DHFR_layout, scales = "free_x", nrow = 1) + # 分组绘图
     geom_point() +
     scale_color_manual(values = main_colors) +
     theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
     geom_boxplot(
-      aes(group = plasmid_class),
+      aes(group = plasmid_type),
       fill = NA, alpha = 0.64,
       outlier.color = "red", outlier.shape = 4 # 离群值
     )
@@ -619,14 +670,14 @@ if (TRUE) {
     data = gr_lg,
     aes(
       x = plasmid, y = od_max,
-      color = plasmid_class, shape = meaning,
+      color = plasmid_type, shape = meaning,
       alpha = replicate
     )
   ) +
-    facet_wrap(~DHFR_position, scales = "free_x", nrow = 1) + # 分组绘图
+    facet_wrap(~DHFR_layout, scales = "free_x", nrow = 1) + # 分组绘图
     geom_point() + # 实验数据点
     # geom_label_repel(
-    #  data = sample, aes(label = plasmid_class),
+    #  data = sample, aes(label = plasmid_type),
     #  size = 2, alpha = 0.64, point.padding = 2, fill = NA,
     # ) + # 图中添加数据标签
     scale_color_manual(values = main_colors) +
@@ -635,39 +686,76 @@ if (TRUE) {
     plot = p_odmaxplasmid_lg,
     width = 12.36, height = 7.64
   )
+  # t检验差异显著性
+  print("alternative hypothesis: true od_max difference in means is greater than 0:")
+  pvt_od_max <- do.call(
+    "rbind",
+    lapply((unique(gr_lg$DHFR_layout)), function(x) {
+      gr_lg_sub <- gr_lg[gr_lg$DHFR_layout == x, ]
+      t_test <- t.test(
+        gr_lg_sub$od_max[gr_lg_sub$meaning == "double positive"],
+        gr_lg_sub$od_max[gr_lg_sub$meaning == "double negative"],
+        alternative = "greater",
+      )
+      print(paste(
+        "DHFR_layout:", x, "p-value:", t_test$p.value,
+        "; confidence interval:[", t_test$conf.int[1], ",", t_test$conf.int[2], "]"
+      ))
+      data.frame(
+        DHFR_layout = x,
+        t = t_test$statistic,
+        df = t_test$parameter["df"],
+        p_value = t_test$p.value,
+        label = paste(
+          "null hypothesis: u <= 0 :\n",
+          "p_value =", generate_sc_label(t_test$p.value)
+        )
+      )
+    })
+  )
   p_odp1_lg <- p_odmaxplasmid_lg + geom_boxplot(
-    aes(group = plasmid_class),
+    aes(group = plasmid_type),
     fill = NA, alpha = 0.64,
     outlier.color = "red", outlier.shape = 4 # 离群值
-  )
+  ) + # 加上t检验结果
+    geom_point() +
+    geom_text(
+      data = pvt_od_max,
+      aes(
+        label = label, x = -Inf, y = Inf,
+        hjust = 0, vjust = 1.2
+      ),
+      color = "darkred",
+      inherit.aes = FALSE
+    )
   ggsave("output/p_odp1_lg.png", plot = p_odp1_lg, width = 12.36, height = 7.64)
   # ----比较显著性差异----
   # 检查正态性（如Shapiro-Wilk检验）
   print("od_max difference:")
-  print(shapiro.test(gr_lg$od_max[gr_lg$plasmid_class == "double positive DHFR3_C_term DHFR12_C_term"]))
-  print(shapiro.test(gr_lg$od_max[gr_lg$plasmid_class == "double negative DHFR3_C_term DHFR12_C_term"]))
+  print(shapiro.test(gr_lg$od_max[gr_lg$plasmid_type == "double positive DHFR3_C_term DHFR12_C_term"]))
+  print(shapiro.test(gr_lg$od_max[gr_lg$plasmid_type == "double negative DHFR3_C_term DHFR12_C_term"]))
   t_test <- t.test(
-    gr_lg$od_max[gr_lg$plasmid_class == "double positive DHFR3_C_term DHFR12_C_term"],
-    gr_lg$od_max[gr_lg$plasmid_class == "double negative DHFR3_C_term DHFR12_C_term"],
-    alternative = "two.sided", mu = 0,
+    gr_lg$od_max[gr_lg$plasmid_type == "double positive DHFR3_C_term DHFR12_C_term"],
+    gr_lg$od_max[gr_lg$plasmid_type == "double negative DHFR3_C_term DHFR12_C_term"],
+    alternative = "greater", mu = 0,
     conf.level = 0.95
   )
 
   print(t_test)
   p_odmaxplasmid_lg2 <- ggplot(
-    data = gr_lg[gr_lg$DHFR_position == "DHFR3_C_term DHFR12_C_term", ],
+    data = gr_lg[gr_lg$DHFR_layout == "DHFR3_C_term DHFR12_C_term", ],
     aes(
       x = plasmid, y = od_max,
-      color = plasmid_class, shape = meaning,
+      color = plasmid_type, shape = meaning,
       alpha = replicate
     )
   ) +
-    facet_wrap(~DHFR_position, scales = "free_x", nrow = 1) + # 分组绘图
+    facet_wrap(~DHFR_layout, scales = "free_x", nrow = 1) + # 分组绘图
     geom_point() +
     scale_color_manual(values = main_colors) +
     theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
     geom_boxplot(
-      aes(group = plasmid_class),
+      aes(group = plasmid_type),
       fill = NA, alpha = 0.64,
       outlier.color = "red", outlier.shape = 4 # 离群值
     )
